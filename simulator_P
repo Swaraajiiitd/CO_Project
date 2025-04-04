@@ -1,0 +1,287 @@
+import math
+def opcode(typ, fn):
+    d = {
+        'R': '0110011',
+        'I': {'lw': '0000011', 'addi': '0010011', 'jalr': '1100111'},
+        'S': '0100011',
+        'B': '1100011',
+        'J': '1101111',
+        'rst':'0000000',
+        'halt':'1111111',
+        'rvrs':'0001000'
+    }
+    for i in d:
+        if i == typ:
+            if i == 'I':
+                for j in d[i]:
+                    if j == fn:
+                        op = d[i][j]
+                        break
+            else:
+                op = d[i]
+            break
+    return op
+
+def reg(r):
+    d = {
+        'zero': 0, 'ra': 1, 'sp': 2, 'gp': 3, 'tp': 4,
+        't0': 5, 't1': 6, 't2': 7, 's0': 8, 'fp': 8, 's1': 9
+    }
+    for i in d:
+        if i == r:
+            dec = d[i]
+            break
+    else:
+        if r[0] == 'a' and r[1].isdigit():
+            dec = 10 + int(r[1])
+        elif r[0] == 's' and r[1].isdigit():
+            dec = 16 + int(r[1:])
+        elif r[0] == 't' and r[1].isdigit():
+            dec = 25 + int(r[1])
+    bin = dec2bin(dec)
+    while len(bin) != 5:
+        bin = '0' + bin
+    return bin
+
+def fn3(a):
+    d = {
+        '000': ['add', 'sub', 'addi', 'jalr', 'beq'],'011': ['mul'],
+        '010': ['slt', 'lw', 'sw'],
+        '101': ['srl'],
+        '110': ['or'],
+        '111': ['and'],
+        '001': ['bne']
+    }
+    for i in d:
+        for j in d[i]:
+            if j == a:
+                return i
+    else:
+      raise Exception("Undefined Instruction2")
+      
+
+def fn7(a):
+    if a == 'sub':
+        return '0100000'
+    else:
+        return '0000000'
+
+def dec2bin(dec):
+    if dec == 0:
+        return '0'
+    bin_str = ''
+    num = abs(dec)
+    while num > 0:
+        bin_str = str(num % 2) + bin_str
+        num //= 2
+    return bin_str
+
+def labladdress(instrn): 
+    temp = dict()
+    pc = 0
+    for i in instrn:
+        i = i.replace(',', ' ')
+        i = i.split()
+        if i and i[0].count(':')>0: 
+            n=i[0].find(':')
+            if i[0][:n] not in temp:
+              temp[i[0][:n]] = pc
+            else:
+                raise Exception('Multiple labels with same name')
+        pc += 4
+    return temp
+
+def complement(imm): 
+    neg = ''
+    for i in imm:
+        neg += '1' if i == '0' else '0'
+    return neg
+
+
+try:
+        with open(r'C:\Users\Sameeksha Jain\Downloads\SEM 2\CO112\ass_input.txt', 'r') as f:
+            instrn = f.read().splitlines()
+            instrn = [x for x in instrn if x.strip()]  
+            for i in instrn:
+                i=i.replace(' ','')
+                if i=='beqzero,zero,0':
+                    break
+            else:
+                raise Exception("Virtual Halt missing")
+
+        with open(r'C:\Users\Sameeksha Jain\Downloads\SEM 2\CO112\bonus_ass_output.txt', 'w') as fh:            
+            binry = typ = ''
+            temp = labladdress(instrn) 
+            pc = 0
+            d = {
+                'R': ['add', 'sub', 'slt', 'srl', 'or','and','mul'],
+                'I': ['lw', 'addi', 'jalr'],
+                'S': ['sw'],
+                'B': ['beq', 'bne'],
+                'J': ['jal'],
+                'rst':['rst'],
+                'halt':['halt'],
+                'rvrs':['rvrs']
+            }
+            
+            for i in instrn:
+                for j in i:       
+                    n=i.find(':')
+                    if j==':' and i[n+1]!=' ':
+                        i=list(i)
+                        i.insert(n+1,' ')
+                        i=''.join(i)
+                i = i.replace(',', ' ') 
+                i = i.split()
+                if not i:  
+                    continue
+                    
+                if i[0][-1] == ':':   
+                    i = i[1:]
+                    if not i:  
+                        continue
+
+                
+                typ = ''
+                for j in d:
+                    for k in d[j]:
+                        if k == i[0]:
+                            typ = j
+                            break
+                    if typ:
+                        break
+                else:
+                    raise Exception("Undefined Instruction1")
+                
+
+                try:           
+                    if typ == 'R':
+                        binry = fn7(i[0]) + reg(i[3]) + reg(i[2]) + fn3(i[0])+ reg(i[1])+ opcode(typ, i[0])
+                    
+                    elif typ == 'I':
+                        if len(i) == 3:  
+                            j = 0
+                            imm_str = ''
+                            temp_str = i[2]  
+                            
+                            while j < len(temp_str) and (temp_str[j].isdigit() or temp_str[j] == '-'):
+                                imm_str += temp_str[j]
+                                j += 1
+                            
+                            if not imm_str:  
+                                imm_str = '0'
+                            reg_str = temp_str[j:].strip('()')
+                            
+                            i.append(imm_str) 
+                            i[2] = reg_str    
+                        
+                        imm_val = int(i[3])
+                        if abs(imm_val)> 2**11-1:
+                            raise Exception("Immediate Overflow")
+                        if imm_val < 0:
+                            imm = dec2bin(abs(imm_val)-1)  
+                            while len(imm) < 12:
+                                imm = '0' + imm
+                            imm = complement(imm)
+                        else:
+                            imm = dec2bin(imm_val)
+                            while len(imm) < 12:
+                                imm = '0' + imm
+                       
+                        binry = imm + reg(i[2]) + fn3(i[0]) + reg(i[1]) + opcode(typ, i[0])
+                    
+                    elif typ == 'S':
+                        j = 0
+                        imm_str = ''
+                        while j < len(i[2]) and (i[2][j].isdigit() or i[2][j] == '-'):
+                            imm_str += i[2][j]
+                            j += 1
+                        
+                        if not imm_str:
+                            imm_str = '0'
+                            
+                        i.append(imm_str)  
+                        i[2] = i[2][j:].strip('()')  
+                        imm_val = int(i[3])
+                        if abs(imm_val)> 2**11-1:
+                            raise Exception("Immediate Overflow")
+                        if imm_val < 0:
+                            imm = dec2bin(abs(imm_val)-1)
+                            while len(imm) < 12:
+                                imm = '0' + imm
+                            imm = complement(imm)
+                        else:
+                            imm = dec2bin(imm_val)
+                            while len(imm) < 12:
+                                imm = '0' + imm
+                                
+                        binry = imm[0:7] + reg(i[1])+ reg(i[2]) + fn3(i[0])+ imm[7:]+ opcode(typ, i[0])
+                    
+                    elif typ == 'B':
+                        if i[3].isdigit() or i[3].startswith('-'):
+                            imm = int(i[3])
+                        else:
+                            for labl in temp:
+                                if i[3] == labl:
+                                    imm = temp[labl] - pc
+                                    break
+                            else:
+                                raise ValueError(f"Undefined label: {i[3]}")
+                        if abs(imm)> 2**12-1:
+                            raise Exception("Immediate Overflow")
+                        
+                        if imm < 0:
+                            imm_bin = dec2bin(abs(imm)-1)
+                            while len(imm_bin) < 13:
+                                imm_bin = '0' + imm_bin
+                            imm_bin = complement(imm_bin)
+                        else:
+                            imm_bin = dec2bin(imm)
+                            while len(imm_bin) < 13:
+                                imm_bin = '0' + imm_bin
+                        
+                        binry = (imm_bin[0] + imm_bin[2:8] + reg(i[2]) +  reg(i[1]) +
+                                fn3(i[0]) + imm_bin[8:12] + imm_bin[1] + opcode(typ, i[0]))
+                    
+                    elif typ == 'J':
+                        for labl in temp:
+                            if i[2] == labl:
+                                imm = temp[labl] - pc
+                                break
+                        else:
+                            if i[2].isdigit:
+                                imm=int(i[2])
+                            else:
+                                raise ValueError(f"Undefined label: {i[2]}")
+                        if abs(imm_val)> 2**20-1:
+                            raise Exception("Immediate Overflow")
+                        if imm < 0:
+                            imm_bin = dec2bin(abs(imm)-1)
+                            while len(imm_bin) < 21:
+                                imm_bin = '0' + imm_bin
+                            imm_bin = complement(imm_bin)
+                        else:
+                            imm_bin = dec2bin(imm)
+                            while len(imm_bin) < 21:
+                                imm_bin = '0' + imm_bin
+                                
+                        binry = imm_bin[0] + imm_bin[10:20] + imm_bin[9] + imm_bin[1:9] + reg(i[1]) +  opcode(typ, i[0])
+                    elif typ=='rst':
+                        binry='00000000000000000000000000000000'
+                    elif typ=='rvrs':
+                        binry='000000000000'+ reg(i[2]) + '000' + reg(i[1]) + opcode(typ, i[0])
+                    elif typ=='halt':
+                        binry='11111111111111111111111111111111'
+                        fh.write(binry + '\n')
+                        break
+                    
+                    fh.write(binry + '\n')
+                    pc += 4
+
+                except Exception as e:
+                    print(f"Error processing instruction: {i}")
+                    print(f"Error details: {str(e)}")
+                    break
+
+except Exception as e:
+        print(f"Error processing file: {str(e)}")
